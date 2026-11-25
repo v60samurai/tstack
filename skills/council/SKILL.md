@@ -55,8 +55,9 @@ If the PR is open, edit the description. Do not post a comment for this.
 If there is no PR, put the same results in the final reply only.
 
 If you agree with their recommendations, make the changes and request a fresh
-review after. Continue this process until all delegates are satisfied with the
-outcome.
+review after. Stop after 2 rounds, or sooner when every delegate approves or
+only nits remain. If a blocker is still disputed after round 2, show both sides
+in 2-3 lines each and let the user decide. The round limit is not approval.
 
 Do not let repeated reviews result in scope creep. It is your job to fight to
 keep scope limited.

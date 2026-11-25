@@ -14,7 +14,7 @@ of scope creep and don't be scared to push back.
 
 ## Budget
 
-- Default: 3 rounds total. Round 1 is full. Later rounds check only
+- Default: 2 rounds total. Round 1 is full. Later rounds check only
   changed code and open findings.
 - Extend to 5 only for security, permissions, auth, data loss, or
   state/concurrency, while a blocker or should stays open with evidence. Or when
