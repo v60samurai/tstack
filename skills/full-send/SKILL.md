@@ -46,15 +46,15 @@ one appears.
    smallest change that works. Fix the case that happened, not every case
    that could. If you are on the default branch, create a branch first.
 2. **Prove it.** Get proof for every change you made. See "Proof".
-3. **Get feedback.** Run one pre-PR review, chosen by risk. Use the
-   `sol-loop` skill by default. When the diff touches auth, permissions,
-   payments, data deletion, migrations, or concurrency, use the `council`
-   skill instead. Never run both.
+3. **Get feedback.** Run the `sol-loop` skill. Its gate escalates a risky
+   change (auth, permissions, payments, data deletion, migrations,
+   concurrency) to the user instead of reviewing it again. When it escalates,
+   stop and ask the user. Run `council` only when the user says so.
 4. **File the PR** with the `file-pr` skill. Rebase onto the latest default
    branch first. Add one short line to the description that says how you proved
    the change.
-5. **Babysit the PR** with the `babysit-pr` skill. Fix real findings and CI
-   failures. Get proof for each fix before you push it.
+5. **Babysit the PR** with the `babysit-pr` skill. Its fixer and debugger
+   handle findings and CI failures. A fixer commit gets CI, not a new review.
 6. **Merge** when the merge gate passes.
 7. **Report** in your final message: the PR link, the merge commit, your proof,
    and each decision you made for the user.
@@ -83,6 +83,13 @@ When you cannot find a way to prove a change, you do not have full confidence.
 Ask the user.
 
 ## Merge gate
+
+Run `review-gate risk --pr <n>` (the `sol-loop` skill's `scripts/`). It
+prints AUTO-APPROVE or NEEDS-HARSHIT with the reasons: risky paths, checks on
+the head, a Codex review of the head with no findings, requested changes, and
+merge state. While `.review-gate.json` has `"autoApprove": false`, which is
+the default, the verdict is a report and the merge waits for the user's word
+even on AUTO-APPROVE. NEEDS-HARSHIT always waits for the user.
 
 Full confidence means all of these are true on the latest commit:
 

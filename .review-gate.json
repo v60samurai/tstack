@@ -1,0 +1,8 @@
+{
+  "checks": [
+    "node --test skills/sol-loop/scripts/review-gate.test.mjs",
+    "python3 -c \"import ast; ast.parse(open('skills/babysit-pr/scripts/pr-wait').read())\""
+  ],
+  "risky": [],
+  "autoApprove": false
+}

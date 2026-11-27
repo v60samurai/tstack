@@ -5,8 +5,35 @@ description: Monitor a pull request through review and CI. Use when the user ask
 
 # Babysit PR
 
-Many repos have AI review bots. They're helpful, even if they are not always
-right.
+You own this PR from the moment it opens until it is merge-ready. One writer
+at a time touches its branch: you, or the fixer, never both. You never
+force-push and never merge.
+
+## Who does what
+
+- **Review bot.** One bot reviews the PR: Codex cloud review
+  (`chatgpt-codex-connector[bot]`, the AI-Dev ChatGPT account), steered by the
+  `## Code Review Rules` section of the repo's `AGENTS.md`. It posts P0 and P1
+  findings only. If it has not reviewed the head, comment `@codex review`
+  once. If another review bot comments, treat it as advisory and tell Harshit
+  it is still switched on.
+- **Fixer.** Claude PR Steward fixes blockers. Start it on the PR with a
+  top-level `@claude steward` comment. It pushes as
+  `Claude <noreply@anthropic.com>`, fixes failing checks in code the PR
+  touches, and makes small requested changes. While Steward is on, you make
+  no commits to the branch. Never use `@claude steward` on a PR you were not
+  asked to babysit.
+- **Debugger.** A CI failure Steward cannot fix (it reports one, or the same
+  check fails twice after its pushes) goes to a scoped debugging subagent with
+  the failing log lines (`gh run view --log-failed`). Comment `@claude stop`
+  before that subagent pushes, and start Steward again after.
+- **No new full review.** A fixer commit gets CI and the review bot only.
+  Do not run `sol-loop` again for it.
+- **Reverts.** Steward can redo a fix after a revert. Comment `@claude stop`
+  first, then revert its commits, then decide whether to start it again.
+
+A finding that is not a P0 or P1 blocker goes to the PR's Follow-ups section
+with one line, not to the fixer.
 
 ## Waiting
 
@@ -48,10 +75,10 @@ It prints one line per real event. It exits 0 when the `--until` condition is
 met or the PR merges, 1 when it needs you (a required check failed, conflicts,
 unresolved threads, PR closed), and 2 on bad input.
 
-- `ready` (default): required checks green, Greptile or Macroscope reviewed the
-  head, and no unresolved threads. Use this to babysit.
-- `green`: required checks only. Use it when the repo has no Greptile or
-  Macroscope.
+- `ready` (default): required checks green, Codex cloud review (or Greptile
+  or Macroscope) reviewed the head, and no unresolved threads. Use this to
+  babysit.
+- `green`: required checks only. Use it when the repo has no review bot.
 - `any-change`: exit on the first event.
 
 In Claude Code, run it with the Monitor tool (`timeout_ms: 3600000`), so each

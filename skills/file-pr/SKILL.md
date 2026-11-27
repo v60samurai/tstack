@@ -33,13 +33,25 @@ GOOD
 
 > ✅ My "new worktree" default was ignored when starting new threads on existing worktrees. Super unintuitive. Now your preferences always apply.
 
+Write the body with `write-pr-description`
+(`~/.agents/skills/write-pr-description/SKILL.md`). Give it these facts too:
+the plan or spec link, and screenshots for a UI change. Paste the output of
+`review-gate status --md` (from the `sol-loop` skill's `scripts/`) as the
+Review, Checks and Follow-ups sections. That output names the commit the
+review approved. Stack the PR on another only when it needs that PR's
+unmerged code.
+
+File with `REVIEW_GATE=<approved sha>` in front of the create command. The
+push guard refuses any other SHA. Use `SOL_LOOP=docs-only` for a docs-only
+diff, and `SOL_LOOP=waived` only when Harshit waived the review.
+
 End the description with the public model name and harness that made the
 changes, for example `Created with <model> in <harness>.` Include subagent
 models that wrote part of the change. Use the model name the harness reports.
 If model identity is unavailable, name the harness without guessing a model.
 
 Footer lines go in this order, each only when it applies: the proof line
-(`full-send`), the `sol-loop` line, the model line, then the harness's own
+(`full-send`), the model line, then the harness's own
 attribution line if the harness requires one.
 
 Before submission, check the title, description, quotes, and attachments for
