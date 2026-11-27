@@ -2,9 +2,10 @@
 // review-gate: the one place the pre-PR review loop's limits live. Skills call it; the push guard reads its approvals.
 // The ledger is one JSON file per branch under the repository's git directory, so it is never committed.
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const SEVERITIES = ["blocker", "should", "nit"];
 const LABELS = ["introduced", "pre-existing"];
@@ -87,7 +88,7 @@ function init(args) {
     ?? fail("Could not tell from the commit trailers which model wrote this change. Rerun with --author claude or --author codex.");
   if (existsSync(r.file) && !args.includes("--reset")) fail(`A ledger already exists for ${r.branch}. Use it, or pass --reset to start over.`);
   config(r.root);
-  save(r, { branch: r.branch, base, author, reviewer: REVIEWER[author], checks: null, rounds: [], escalated: null, approved: null });
+  save(r, { branch: r.branch, base, baseRef, author, reviewer: REVIEWER[author], checks: null, rounds: [], escalated: null, approved: null });
   return `Ledger for ${r.branch}. Base ${base.slice(0, 12)}. Written by ${author}, so the reviewer is ${REVIEWER[author]}.`;
 }
 
@@ -98,9 +99,11 @@ function check() {
   const logFile = path.join(path.dirname(r.file), `${r.branch.replaceAll("/", "__")}-${sha.slice(0, 12)}.log`);
   writeFileSync(logFile, "");
   const results = cfg.checks.map((cmd) => ({ cmd, exit: run(cmd, r.root, logFile) }));
-  l.checks = { sha, ok: results.every((x) => x.exit === 0), results, log: logFile };
+  const changed = git(["status", "--porcelain"], { cwd: r.root });
+  l.checks = { sha, ok: results.every((x) => x.exit === 0) && changed === "", results, log: logFile };
   save(r, l);
   const lines = results.map((x) => `${x.exit === 0 ? "pass" : "FAIL"} (exit ${x.exit}) ${x.cmd}`);
+  if (changed) fail(`${lines.join("\n")}\nA check changed files, so ${sha.slice(0, 12)} is not what was tested:\n${changed}\nCommit or discard those changes, then rerun. Log: ${logFile}`);
   if (!l.checks.ok) fail(`${lines.join("\n")}\nChecks failed on ${sha.slice(0, 12)}. Fix them before review. Log: ${logFile}`);
   return `${lines.join("\n")}\nChecks passed on ${sha.slice(0, 12)}. Log: ${logFile}`;
 }
@@ -186,7 +189,10 @@ function findingFix(args) {
   if (sha === rd.to) fail(`Commit the fix and its test first. HEAD is still the reviewed commit ${sha.slice(0, 12)}.`);
   for (const t of files) if (tryGit(["cat-file", "-e", `HEAD:${t}`]) === null) fail(`${t} is not in HEAD. Commit the test first.`);
   // Put every non-test file back to the reviewed commit, keep the new test, and expect it to fail.
-  const revert = changedFiles(r.root, rd.to).filter((p) => !files.includes(p));
+  // With --stale-test the tests go back too: the reviewed commit's own test must fail, and the updated one pass.
+  const stale = args.includes("--stale-test");
+  if (stale) for (const t of files) if (tryGit(["cat-file", "-e", `${rd.to}:${t}`]) === null) fail(`${t} is not in the reviewed commit, so it is a new test, not a stale one. Drop --stale-test.`);
+  const revert = changedFiles(r.root, rd.to).filter((p) => stale || !files.includes(p));
   let before;
   try {
     for (const p of revert) {
@@ -197,11 +203,12 @@ function findingFix(args) {
   } finally {
     git(["reset", "-q", "--hard", sha], { cwd: r.root });
   }
+  if (before === 0 && stale) fail(`The reviewed commit's own test passes (on ${rd.to.slice(0, 12)}), so it was not stale and does not prove ${id}.`);
   if (before === 0) fail(`The test passes without the fix (on ${rd.to.slice(0, 12)} plus the test), so it does not prove ${id}. The finding may be false: revert the fix, or write a test that fails without it.`);
   const after = run(cmd, r.root);
   if (after !== 0) fail(`The test fails on HEAD (exit ${after}), so the fix does not work yet.`);
   f.outcome = "fixed";
-  f.fix = { commit: sha, tests: files, cmd, before, after };
+  f.fix = { commit: sha, tests: files, cmd, before, after, stale };
   save(r, l);
   return `${id} fixed in ${sha.slice(0, 12)}. The test failed without the fix (exit ${before}) and passes with it.`;
 }
@@ -219,6 +226,12 @@ function findingDecline(args) {
   return `${id} declined (${kind}, by ${f.decline.by}).`;
 }
 
+function samePatch(root, a, b, c, d) {
+  const id = (from, to) => spawnSync("git", ["patch-id", "--stable"], { cwd: root, encoding: "utf8", input: git(["diff", `${from}..${to}`], { cwd: root }) }).stdout.split(" ")[0];
+  const x = id(a, b);
+  return Boolean(x) && x === id(c, d);
+}
+
 function verify() {
   const r = repo(); const l = load(r);
   const sha = head(r.root);
@@ -229,13 +242,22 @@ function verify() {
   if (l.rounds.some((x) => !x.ended)) why.push("a round is still open");
   if (openBlockers(l).length) why.push(`blockers still open: ${openBlockers(l).map((f) => f.id).join(", ")}`);
   const last = l.rounds.at(-1);
+  let rebasedOnto = null;
   if (last && l.rounds.length === 1 && last.to !== sha) {
-    why.push(last.findings.some((f) => f.outcome === "fixed")
+    const fixed = last.findings.some((f) => f.outcome === "fixed");
+    const newBase = tryGit(["merge-base", "HEAD", l.baseRef ?? l.base]);
+    if (!fixed && newBase && newBase !== l.base && samePatch(r.root, l.base, last.to, newBase, sha)) rebasedOnto = newBase;
+    else why.push(fixed
       ? "round 1's fixes have not been reviewed. Run round 2 on the fix commits"
-      : `HEAD moved after round 1 without a fixed blocker. Commits after review need round 2`);
+      : "HEAD moved after round 1 and is not a plain rebase of the reviewed change. Commits after review need round 2");
+  }
+  for (const f of allFindings(l).filter((x) => x.outcome === "fixed")) {
+    const exit = run(f.fix.cmd, r.root);
+    if (exit !== 0) why.push(`${f.id}'s fix test fails on HEAD (exit ${exit}): ${f.fix.cmd}`);
   }
   if (why.length) fail(`Not approved:\n- ${why.join("\n- ")}`);
-  l.approved = { sha, at: new Date().toISOString(), rounds: l.rounds.length };
+  if (rebasedOnto) l.base = rebasedOnto;
+  l.approved = { sha, at: new Date().toISOString(), rounds: l.rounds.length, rebasedOnto };
   save(r, l);
   mkdirSync(path.join(STATE, "approved"), { recursive: true });
   writeFileSync(path.join(STATE, "approved", sha), JSON.stringify({ repo: r.root, branch: r.branch, rounds: l.rounds.length }) + "\n");
@@ -296,31 +318,42 @@ function learn(args) {
 const CODEX_BOT = "chatgpt-codex-connector[bot]";
 function gh(p) { return JSON.parse(execFileSync("gh", ["api", "--paginate", "--slurp", p], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })).flat(); }
 
-function risk(args) {
-  const r = repo(); const cfg = config(r.root);
-  const pr = flag(args, "pr", { required: true });
-  const slug = flag(args, "repo") ?? execFileSync("gh", ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], { cwd: r.root, encoding: "utf8" }).trim();
-  const [p] = gh(`repos/${slug}/pulls/${pr}`);
-  const sha = p.head.sha;
-  const files = gh(`repos/${slug}/pulls/${pr}/files`).map((f) => f.filename);
-  const runs = gh(`repos/${slug}/commits/${sha}/check-runs`).flatMap((x) => x.check_runs ?? []);
-  const reviews = gh(`repos/${slug}/pulls/${pr}/reviews`);
-  const comments = gh(`repos/${slug}/pulls/${pr}/comments`);
+export function riskVerdict({ pr, files, runs, statuses, reviews, comments, risky }) {
+  const sha = pr.head.sha;
   const codex = reviews.filter((v) => v.user.login === CODEX_BOT && v.commit_id === sha);
   const codexFindings = comments.filter((c) => c.user.login === CODEX_BOT && codex.some((v) => v.id === c.pull_request_review_id));
   const why = [];
-  const hit = files.filter((f) => cfg.risky.some((g) => path.matchesGlob(f, g)));
+  const hit = files.filter((f) => risky.some((g) => path.matchesGlob(f, g)));
   if (hit.length) why.push(`touches risky paths: ${hit.join(", ")}`);
   const bad = runs.filter((x) => x.status !== "completed" || !["success", "skipped", "neutral"].includes(x.conclusion));
-  if (!runs.length) why.push("no checks ran on the head commit");
+  const badStatus = statuses.filter((x) => x.state !== "success");
+  if (!runs.length && !statuses.length) why.push("no checks ran on the head commit");
   if (bad.length) why.push(`checks not green: ${bad.map((x) => `${x.name}=${x.conclusion ?? x.status}`).join(", ")}`);
+  if (badStatus.length) why.push(`statuses not green: ${badStatus.map((x) => `${x.context}=${x.state}`).join(", ")}`);
   if (!codex.length) why.push(`no Codex review of the head commit ${sha.slice(0, 12)}`);
   if (codexFindings.length) why.push(`Codex left ${codexFindings.length} finding(s) on the head commit`);
+  // shortcut: a later approval does not clear an earlier change request, so this errs toward asking Harshit; read each reviewer's latest state when that gets noisy.
   if (reviews.some((v) => v.state === "CHANGES_REQUESTED")) why.push("a reviewer requested changes");
-  if (p.mergeable_state && !["clean", "unstable", "has_hooks"].includes(p.mergeable_state)) why.push(`mergeable state is ${p.mergeable_state}`);
-  const verdict = why.length ? "NEEDS-HARSHIT" : "AUTO-APPROVE";
+  if (pr.mergeable_state && !["clean", "has_hooks"].includes(pr.mergeable_state)) why.push(`mergeable state is ${pr.mergeable_state}`);
+  return { verdict: why.length ? "NEEDS-HARSHIT" : "AUTO-APPROVE", why, sha };
+}
+
+function risk(args) {
+  const r = repo(); const cfg = config(r.root);
+  const n = flag(args, "pr", { required: true });
+  const slug = flag(args, "repo") ?? execFileSync("gh", ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], { cwd: r.root, encoding: "utf8" }).trim();
+  const [pr] = gh(`repos/${slug}/pulls/${n}`);
+  const { verdict, why, sha } = riskVerdict({
+    pr,
+    files: gh(`repos/${slug}/pulls/${n}/files`).map((f) => f.filename),
+    runs: gh(`repos/${slug}/commits/${pr.head.sha}/check-runs`).flatMap((x) => x.check_runs ?? []),
+    statuses: gh(`repos/${slug}/commits/${pr.head.sha}/status`).flatMap((x) => x.statuses ?? []),
+    reviews: gh(`repos/${slug}/pulls/${n}/reviews`),
+    comments: gh(`repos/${slug}/pulls/${n}/comments`),
+    risky: cfg.risky,
+  });
   const mode = cfg.autoApprove ? "on" : "off (report only; merges stay with Harshit)";
-  return `${verdict} #${pr} at ${sha.slice(0, 12)}. Risk gate: ${mode}.${why.length ? "\n- " + why.join("\n- ") : ""}`;
+  return `${verdict} #${n} at ${sha.slice(0, 12)}. Risk gate: ${mode}.${why.length ? "\n- " + why.join("\n- ") : ""}`;
 }
 
 const COMMANDS = {
@@ -329,11 +362,13 @@ const COMMANDS = {
   finding: (a) => ({ add: findingAdd, fix: findingFix, decline: findingDecline })[a[0]]?.(a.slice(1)) ?? fail("finding add | finding fix <id> | finding decline <id>"),
 };
 
-const [cmd, ...rest] = process.argv.slice(2);
-try {
-  const fn = COMMANDS[cmd] ?? fail(`Usage: review-gate <${Object.keys(COMMANDS).join("|")}> ...`);
-  console.log(fn(rest));
-} catch (e) {
-  console.error(e instanceof GateError ? e.message : e.stack);
-  process.exit(e instanceof GateError ? 1 : 2);
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
+  const [cmd, ...rest] = process.argv.slice(2);
+  try {
+    const fn = COMMANDS[cmd] ?? fail(`Usage: review-gate <${Object.keys(COMMANDS).join("|")}> ...`);
+    console.log(fn(rest));
+  } catch (e) {
+    console.error(e instanceof GateError ? e.message : e.stack);
+    process.exit(e instanceof GateError ? 1 : 2);
+  }
 }

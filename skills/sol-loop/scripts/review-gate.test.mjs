@@ -135,3 +135,80 @@ test("a change written by an unknown model must name its author", () => {
   no(s.gate("init", "--base", "main"), /--author claude or --author codex/);
   ok(s.gate("init", "--base", "main", "--author", "codex"), /reviewer is claude-opus/);
 });
+
+test("S1 a check that rewrites tracked files does not certify the commit", () => {
+  const s = sandbox();
+  writeFileSync(path.join(s.dir, "check.sh"), "echo rewritten > app.sh\n");
+  s.commit("an autofixing check");
+  ok(s.gate("init", "--base", "main"));
+  no(s.gate("check"), /A check changed files/);
+});
+
+test("S2 verify reruns every earlier fix test, so a later change cannot undo a fix silently", () => {
+  const s = sandbox();
+  ok(s.gate("init", "--base", "main"));
+  ok(s.gate("check"));
+  ok(s.gate("round", "start"));
+  ok(s.gate("finding", "add", "--sev", "blocker", "--label", "introduced", "--file", "app.sh", "--claim", "prints 2, callers expect 3"));
+  ok(s.gate("round", "end", "--read", "Read app.sh and its only caller; the caller parses the output and expects 3."));
+  writeFileSync(path.join(s.dir, "t.sh"), "[ \"$(sh app.sh)\" = 3 ]\n");
+  writeFileSync(path.join(s.dir, "app.sh"), "echo 3\n");
+  s.commit("fix");
+  ok(s.gate("finding", "fix", "R1-1", "--files", "t.sh", "--cmd", "sh t.sh"));
+  ok(s.gate("check"));
+  ok(s.gate("round", "start"));
+  ok(s.gate("round", "end", "--read", "Read the fix commit and its test; the test pins the expected output of 3."));
+  writeFileSync(path.join(s.dir, "app.sh"), "echo 4\n");
+  s.commit("a later change that breaks the fix");
+  ok(s.gate("check"));
+  no(s.gate("verify"), /R1-1's fix test fails on HEAD/);
+});
+
+test("S3 a plain rebase after a clean round still approves", () => {
+  const s = sandbox();
+  ok(s.gate("init", "--base", "main"));
+  ok(s.gate("check"));
+  ok(s.gate("round", "start"));
+  ok(s.gate("round", "end", "--read", "Read app.sh and check.sh; the only change swaps the printed value and nothing calls it."));
+  s.sh("git checkout -q main && echo other > other.txt && git add other.txt && git commit -qm 'main moves' && git checkout -q feat && git rebase -q main");
+  ok(s.gate("check"));
+  ok(s.gate("verify"), /Approved/);
+  writeFileSync(path.join(s.dir, "app.sh"), "echo 9\n");
+  s.commit("new work after the rebase");
+  ok(s.gate("check"));
+  no(s.gate("verify"), /not a plain rebase/);
+});
+
+test("S4 the risk verdict counts commit statuses and refuses an unstable merge state", async () => {
+  const { riskVerdict } = await import(GATE);
+  const sha = "f".repeat(40);
+  const clean = {
+    pr: { head: { sha }, mergeable_state: "clean" },
+    files: ["src/app.ts"],
+    runs: [{ name: "ci", status: "completed", conclusion: "success" }],
+    statuses: [],
+    reviews: [{ id: 1, user: { login: "chatgpt-codex-connector[bot]" }, commit_id: sha, state: "COMMENTED" }],
+    comments: [],
+    risky: ["auth/**"],
+  };
+  assert.equal(riskVerdict(clean).verdict, "AUTO-APPROVE");
+  const failed = riskVerdict({ ...clean, statuses: [{ context: "legacy-ci", state: "failure" }] });
+  assert.equal(failed.verdict, "NEEDS-HARSHIT");
+  assert.match(failed.why.join(), /legacy-ci=failure/);
+  assert.equal(riskVerdict({ ...clean, pr: { ...clean.pr, mergeable_state: "unstable" } }).verdict, "NEEDS-HARSHIT");
+  assert.equal(riskVerdict({ ...clean, files: ["auth/login.ts"] }).verdict, "NEEDS-HARSHIT");
+});
+
+test("stale-test mode proves a fix that updates a test the reviewed change broke", () => {
+  const s = sandbox();
+  s.sh("git checkout -q main && printf '[ \"$(sh app.sh)\" = 1 ]\\n' > t.sh && git add t.sh && git commit -qm 'old test' && git checkout -q feat && git rebase -q main");
+  ok(s.gate("init", "--base", "main"));
+  ok(s.gate("check"));
+  ok(s.gate("round", "start"));
+  ok(s.gate("finding", "add", "--sev", "blocker", "--label", "introduced", "--file", "t.sh", "--claim", "t.sh still expects 1 after the change prints 2"));
+  ok(s.gate("round", "end", "--read", "Read app.sh and t.sh; the change prints 2 and the existing test still asserts 1."));
+  writeFileSync(path.join(s.dir, "t.sh"), "[ \"$(sh app.sh)\" = 2 ]\n");
+  s.commit("update the stale test");
+  no(s.gate("finding", "fix", "R1-1", "--files", "t.sh", "--cmd", "sh t.sh"), /passes without the fix/);
+  ok(s.gate("finding", "fix", "R1-1", "--files", "t.sh", "--cmd", "sh t.sh", "--stale-test"), /failed without the fix/);
+});
