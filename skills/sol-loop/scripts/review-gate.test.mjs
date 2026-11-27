@@ -212,3 +212,19 @@ test("stale-test mode proves a fix that updates a test the reviewed change broke
   no(s.gate("finding", "fix", "R1-1", "--files", "t.sh", "--cmd", "sh t.sh"), /passes without the fix/);
   ok(s.gate("finding", "fix", "R1-1", "--files", "t.sh", "--cmd", "sh t.sh", "--stale-test"), /failed without the fix/);
 });
+
+test("R2 verify stays approved after a rebase, and a second rebase approves too", () => {
+  const s = sandbox();
+  ok(s.gate("init", "--base", "main"));
+  ok(s.gate("check"));
+  ok(s.gate("round", "start"));
+  ok(s.gate("round", "end", "--read", "Read app.sh and check.sh; the only change swaps the printed value and nothing calls it."));
+  const rebase = (file) => s.sh(`git checkout -q main && echo x > ${file} && git add ${file} && git commit -qm 'main moves' && git checkout -q feat && git rebase -q main`);
+  rebase("one.txt");
+  ok(s.gate("check"));
+  ok(s.gate("verify"), /Approved/);
+  ok(s.gate("verify"), /Approved/);
+  rebase("two.txt");
+  ok(s.gate("check"));
+  ok(s.gate("verify"), /Approved/);
+});

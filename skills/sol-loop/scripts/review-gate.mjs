@@ -256,7 +256,8 @@ function verify() {
     if (exit !== 0) why.push(`${f.id}'s fix test fails on HEAD (exit ${exit}): ${f.fix.cmd}`);
   }
   if (why.length) fail(`Not approved:\n- ${why.join("\n- ")}`);
-  if (rebasedOnto) l.base = rebasedOnto;
+  // A plain rebase of the reviewed change counts as reviewed, so later checks compare against the rebased commit.
+  if (rebasedOnto) { l.base = rebasedOnto; last.reviewedTo ??= last.to; last.to = sha; }
   l.approved = { sha, at: new Date().toISOString(), rounds: l.rounds.length, rebasedOnto };
   save(r, l);
   mkdirSync(path.join(STATE, "approved"), { recursive: true });
