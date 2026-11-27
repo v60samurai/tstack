@@ -111,7 +111,7 @@ function check() {
 function roundStart() {
   const r = repo(); const l = load(r); const cfg = config(r.root);
   const sha = head(r.root);
-  if (l.escalated) fail(`Escalated to Harshit: ${l.escalated}. No more rounds.`);
+  if (l.escalated) fail(`Escalated: ${l.escalated}. No more rounds. Run \`review-gate verify\` and file the PR; it waits for Harshit before merge.`);
   if (l.rounds.some((x) => !x.ended)) fail("A round is still open. End it with `review-gate round end` first.");
   if (!l.checks || l.checks.sha !== sha || !l.checks.ok) fail(`Checks have not passed on HEAD ${sha.slice(0, 12)}. Run \`review-gate check\` first.`);
   const n = l.rounds.length + 1;
@@ -127,7 +127,7 @@ function roundStart() {
     if (risky.length || flagged.length) {
       l.escalated = `this change is risky (${[...risky, ...flagged].join(", ")}), so it goes to Harshit instead of round 2`;
       save(r, l);
-      fail(`Escalated to Harshit: ${l.escalated}. Show him round 1's findings and the fix commits, then stop.`);
+      fail(`Escalated: ${l.escalated}. No round 2. Run \`review-gate verify\`, file the PR, and it waits for Harshit before merge.`);
     }
     from = first.to;
   }
@@ -172,7 +172,7 @@ function findingAdd(args) {
   if (f.risk && severity === "blocker") l.escalated = `${f.id} is a ${f.risk} blocker`;
   save(r, l);
   if (f.outcome === "followup") return `${f.id} is a ${severity}. It goes to follow-ups and gets no fix in this loop.`;
-  return f.risk ? `${f.id} is a ${f.risk} blocker, so the change is escalated to Harshit. Show him the finding and stop.` : `${f.id} recorded as a blocker.`;
+  return f.risk ? `${f.id} is a ${f.risk} blocker, so the change is escalated: fix it with a test or decline it, then verify and file. The PR waits for Harshit before merge.` : `${f.id} recorded as a blocker.`;
 }
 
 function findingFix(args) {
@@ -236,14 +236,13 @@ function verify() {
   const r = repo(); const l = load(r);
   const sha = head(r.root);
   const why = [];
-  if (l.escalated) why.push(`escalated to Harshit: ${l.escalated}. File only on his word, with SOL_LOOP=waived`);
   if (!l.checks || l.checks.sha !== sha || !l.checks.ok) why.push(`checks have not passed on HEAD ${sha.slice(0, 12)}`);
   if (!l.rounds.length) why.push("no review round has run");
   if (l.rounds.some((x) => !x.ended)) why.push("a round is still open");
   if (openBlockers(l).length) why.push(`blockers still open: ${openBlockers(l).map((f) => f.id).join(", ")}`);
   const last = l.rounds.at(-1);
   let rebasedOnto = null;
-  if (last && l.rounds.length === 1 && last.to !== sha) {
+  if (last && l.rounds.length === 1 && last.to !== sha && !l.escalated) {
     const fixed = last.findings.some((f) => f.outcome === "fixed");
     const newBase = tryGit(["merge-base", "HEAD", l.baseRef ?? l.base]);
     if (!fixed && newBase && newBase !== l.base && samePatch(r.root, l.base, last.to, newBase, sha)) rebasedOnto = newBase;
@@ -258,11 +257,12 @@ function verify() {
   if (why.length) fail(`Not approved:\n- ${why.join("\n- ")}`);
   // A plain rebase of the reviewed change counts as reviewed, so later checks compare against the rebased commit.
   if (rebasedOnto) { l.base = rebasedOnto; last.reviewedTo ??= last.to; last.to = sha; }
-  l.approved = { sha, at: new Date().toISOString(), rounds: l.rounds.length, rebasedOnto };
+  l.approved = { sha, at: new Date().toISOString(), rounds: l.rounds.length, rebasedOnto, escalated: l.escalated };
   save(r, l);
   mkdirSync(path.join(STATE, "approved"), { recursive: true });
-  writeFileSync(path.join(STATE, "approved", sha), JSON.stringify({ repo: r.root, branch: r.branch, rounds: l.rounds.length }) + "\n");
-  return `Approved ${sha} after ${l.rounds.length} round(s). File with REVIEW_GATE=${sha} in front of the create command.`;
+  writeFileSync(path.join(STATE, "approved", sha), JSON.stringify({ repo: r.root, branch: r.branch, rounds: l.rounds.length, escalated: l.escalated }) + "\n");
+  const note = l.escalated ? ` Escalated: ${l.escalated}. File it anyway; \`status --md\` flags it in the PR body, and it needs Harshit's review before merge.` : "";
+  return `Approved ${sha} after ${l.rounds.length} round(s). File with REVIEW_GATE=${sha} in front of the create command.${note}`;
 }
 
 function status(args) {
@@ -273,6 +273,7 @@ function status(args) {
   return [
     "### Review",
     l.approved ? `Reviewed by ${l.reviewer}, ${l.approved.rounds} round(s). Approved commit \`${l.approved.sha}\`.` : "Not approved yet.",
+    ...(l.escalated ? [`**Needs Harshit's review before merge.** Escalated: ${l.escalated}.`] : []),
     ...allFindings(l).filter((f) => f.outcome === "fixed").map((f) => `- Fixed ${f.id}: ${f.claim} (test: ${f.fix.tests.join(", ")})`),
     "",
     "### Checks",

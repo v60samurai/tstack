@@ -20,13 +20,20 @@ Make the smallest change that answers a real blocker. Push back on the rest.
   or with a decline and a reason.
 - At most one more round, on the fix commits only. There is no round 3.
 - A risky change (the repo's risky paths, or a security, auth, data-loss or
-  concurrency blocker) goes to Harshit instead of getting round 2.
+  concurrency blocker) gets no round 2. It still files, flagged for Harshit's
+  review before merge.
 
 ## 1. Start
 
 Run `git status --short`. Commit only this change's files; do not stash or
-discard anything else. If the repo has no `.review-gate.json`, stop and ask
-Harshit for its check commands and risky paths.
+discard anything else. If the repo has no `.review-gate.json`, write one and
+commit it with the change: `checks` are the typecheck and the tests its CI
+runs on a pull request (only the tests the change reaches, never a whole
+suite CI already runs), and `risky` holds the globs for auth, billing or
+payments, migrations and SQL, data deletion, CI workflows and deploy config
+that exist in the repo. Say in the PR body that the file is new, so Harshit
+can correct it. Run reviews in a clean worktree of the branch when the main
+checkout holds other work.
 
 ```bash
 review-gate init            # base = merge-base with the default branch; --base <ref> for a stacked PR
@@ -104,9 +111,10 @@ Same brief, with the fix range. Record and answer as in step 3. After round
 filing: `REVIEW_GATE=<sha> gh pr create ...`. Any commit after approval needs
 `check` and `verify` again.
 
-When it refuses with "escalated", show Harshit the findings and the fix
-commits in 2-3 lines each and stop. File only on his word, with
-`SOL_LOOP=waived`. A docs-only diff skips the loop with `SOL_LOOP=docs-only`.
+An escalated change does not stop the flow. `verify` approves it with a
+flag, and `status --md` puts "Needs Harshit's review before merge" in the PR
+body. File it and babysit it as usual; only the merge waits for Harshit. A
+docs-only diff skips the loop with `SOL_LOOP=docs-only`.
 
 `review-gate status --md` prints the review, checks and follow-ups sections
 for the PR body. `file-pr` puts them in.

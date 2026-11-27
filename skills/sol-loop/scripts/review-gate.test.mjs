@@ -103,7 +103,7 @@ test("should-fixes cannot be fixed, declines need a kind, and two declines by Ha
   ok(s.gate("learn", path.dirname(s.dir)), /Do not flag missing-null-guard\. Harshit declined it 2 times/);
 });
 
-test("a risky change escalates to Harshit instead of getting round 2", () => {
+test("a risky change escalates instead of getting round 2, and still files with a flag for Harshit", () => {
   const s = sandbox({ risky: ["auth/**"] });
   s.sh("mkdir -p auth && echo x > auth/login.sh");
   s.commit("touch auth");
@@ -117,8 +117,9 @@ test("a risky change escalates to Harshit instead of getting round 2", () => {
   s.commit("fix");
   ok(s.gate("finding", "fix", "R1-1", "--files", "t.sh", "--cmd", "sh t.sh"));
   ok(s.gate("check"));
-  no(s.gate("round", "start"), /Escalated to Harshit[\s\S]*auth\/login\.sh/);
-  no(s.gate("verify"), /SOL_LOOP=waived/);
+  no(s.gate("round", "start"), /Escalated: [\s\S]*auth\/login\.sh/);
+  ok(s.gate("verify"), /Approved[\s\S]*needs Harshit's review before merge/);
+  ok(s.gate("status", "--md"), /Needs Harshit's review before merge/);
 });
 
 test("a security blocker escalates as soon as it is recorded", () => {
@@ -126,7 +127,7 @@ test("a security blocker escalates as soon as it is recorded", () => {
   ok(s.gate("init", "--base", "main"));
   ok(s.gate("check"));
   ok(s.gate("round", "start"));
-  ok(s.gate("finding", "add", "--sev", "blocker", "--label", "introduced", "--risk", "security", "--file", "app.sh", "--claim", "leaks a token"), /escalated to Harshit/);
+  ok(s.gate("finding", "add", "--sev", "blocker", "--label", "introduced", "--risk", "security", "--file", "app.sh", "--claim", "leaks a token"), /escalated[\s\S]*waits for Harshit before merge/);
 });
 
 test("a change written by an unknown model must name its author", () => {

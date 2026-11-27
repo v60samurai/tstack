@@ -46,10 +46,11 @@ one appears.
    smallest change that works. Fix the case that happened, not every case
    that could. If you are on the default branch, create a branch first.
 2. **Prove it.** Get proof for every change you made. See "Proof".
-3. **Get feedback.** Run the `sol-loop` skill. Its gate escalates a risky
-   change (auth, permissions, payments, data deletion, migrations,
-   concurrency) to the user instead of reviewing it again. When it escalates,
-   stop and ask the user. Run `council` only when the user says so.
+3. **Get feedback.** Run the `sol-loop` skill. Its gate flags a risky change
+   (auth, permissions, payments, data deletion, migrations, concurrency) for
+   the user instead of reviewing it again. Keep going: file and babysit it,
+   and never merge a flagged PR without the user's word. Run `council` only
+   when the user says so.
 4. **File the PR** with the `file-pr` skill. Rebase onto the latest default
    branch first. Add one short line to the description that says how you proved
    the change.
