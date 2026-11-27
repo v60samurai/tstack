@@ -38,6 +38,10 @@ changes, for example `Created with <model> in <harness>.` Include subagent
 models that wrote part of the change. Use the model name the harness reports.
 If model identity is unavailable, name the harness without guessing a model.
 
+Footer lines go in this order, each only when it applies: the proof line
+(`full-send`), the `sol-loop` line, the model line, then the harness's own
+attribution line if the harness requires one.
+
 Before submission, check the title, description, quotes, and attachments for
 secrets and private details.
 
