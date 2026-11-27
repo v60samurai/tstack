@@ -27,6 +27,10 @@ Keep the attribution inside the note and the actual reply outside it. The
 context line must start with the robot emoji. Do not add a horizontal rule,
 Setext underline, heading, signature footer, or a second attribution.
 
+Post a bot command bare, with no note and nothing else in the comment:
+`@claude steward`, `@claude stop`, `@codex review`. The bot reads only a
+comment that starts with its command.
+
 Apply this format to top-level PR comments, inline review comments, replies to
 bots or reviewers, and written explanations used before resolving or
 dismissing feedback. Do not add it to PR descriptions, commit messages, or text

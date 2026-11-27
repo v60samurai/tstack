@@ -229,3 +229,23 @@ test("R2 verify stays approved after a rebase, and a second rebase approves too"
   ok(s.gate("check"));
   ok(s.gate("verify"), /Approved/);
 });
+
+test("R1-5 a change request that the same reviewer later approved no longer blocks the risk verdict", async () => {
+  const { riskVerdict } = await import(GATE);
+  const sha = "e".repeat(40);
+  const base = {
+    pr: { head: { sha }, mergeable_state: "clean" },
+    files: ["src/app.ts"],
+    runs: [{ name: "ci", status: "completed", conclusion: "success" }],
+    statuses: [],
+    comments: [],
+    risky: [],
+  };
+  const codex = { id: 9, user: { login: "chatgpt-codex-connector[bot]" }, commit_id: sha, state: "COMMENTED" };
+  const asked = { id: 1, user: { login: "ana" }, state: "CHANGES_REQUESTED" };
+  const approved = { id: 2, user: { login: "ana" }, state: "APPROVED" };
+  assert.equal(riskVerdict({ ...base, reviews: [asked, approved, codex] }).verdict, "AUTO-APPROVE");
+  const still = riskVerdict({ ...base, reviews: [approved, asked, codex] });
+  assert.equal(still.verdict, "NEEDS-HARSHIT");
+  assert.match(still.why.join(), /changes requested by ana/);
+});

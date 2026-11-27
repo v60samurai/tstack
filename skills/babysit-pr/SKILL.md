@@ -15,10 +15,15 @@ force-push and never merge.
   (`chatgpt-codex-connector[bot]`, the AI-Dev ChatGPT account), steered by the
   `## Code Review Rules` section of the repo's `AGENTS.md`. It posts P0 and P1
   findings only. If it has not reviewed the head, comment `@codex review`
-  once. If another review bot comments, treat it as advisory and tell Harshit
+  once, bare. If Codex never responds, it is not connected to the repo: wait
+  with `pr-wait --until green`, and the final report says the review bot is
+  missing. If another review bot comments, treat it as advisory and tell Harshit
   it is still switched on.
 - **Fixer.** Claude PR Steward fixes blockers. Start it on the PR with a
-  top-level `@claude steward` comment. It pushes as
+  top-level comment that is only `@claude steward`, with no note callout.
+  If neither a reaction nor a progress comment from Steward appears within 10
+  minutes, Steward is not installed on the repo: the debugger subagent fixes
+  blockers instead, and the final report says Steward is missing. It pushes as
   `Claude <noreply@anthropic.com>`, fixes failing checks in code the PR
   touches, and makes small requested changes. While Steward is on, you make
   no commits to the branch. Never use `@claude steward` on a PR you were not

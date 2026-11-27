@@ -334,8 +334,11 @@ export function riskVerdict({ pr, files, runs, statuses, reviews, comments, risk
   if (badStatus.length) why.push(`statuses not green: ${badStatus.map((x) => `${x.context}=${x.state}`).join(", ")}`);
   if (!codex.length) why.push(`no Codex review of the head commit ${sha.slice(0, 12)}`);
   if (codexFindings.length) why.push(`Codex left ${codexFindings.length} finding(s) on the head commit`);
-  // shortcut: a later approval does not clear an earlier change request, so this errs toward asking Harshit; read each reviewer's latest state when that gets noisy.
-  if (reviews.some((v) => v.state === "CHANGES_REQUESTED")) why.push("a reviewer requested changes");
+  // Each reviewer's latest decisive review counts, so a later approval or dismissal clears an earlier change request.
+  const latest = new Map();
+  for (const v of reviews) if (["APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(v.state)) latest.set(v.user.login, v.state);
+  const blocking = [...latest].filter(([, state]) => state === "CHANGES_REQUESTED").map(([login]) => login);
+  if (blocking.length) why.push(`changes requested by ${blocking.join(", ")}`);
   if (pr.mergeable_state && !["clean", "has_hooks"].includes(pr.mergeable_state)) why.push(`mergeable state is ${pr.mergeable_state}`);
   return { verdict: why.length ? "NEEDS-HARSHIT" : "AUTO-APPROVE", why, sha };
 }
