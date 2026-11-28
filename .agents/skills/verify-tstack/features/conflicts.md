@@ -20,7 +20,8 @@ Set `ctx="python3 skills/resolve-merge-conflicts/scripts/extract_conflict_contex
 - **Summary.** `$ctx --repo "$run/c"` prints `conflicted files: 1` and `notes.md | type=text | stages=1,2,3 | hunks=1`.
 - **Detail.** `$ctx --repo "$run/c" --file notes.md` shows `line one from feat` and `line one from main`.
 - **Unresolved.** `$ctx --repo "$run/c" --check` exits 1 and prints `unmerged: notes.md`.
-- **Markers staged by mistake.** `git -C "$run/c" add notes.md`, then `--check` exits 1 and prints `conflict marker: notes.md:1`.
+- **Markers staged by mistake.** `git -C "$run/c" add notes.md`, then `--check` exits 1 and prints `conflict marker: notes.md:1 (staged)`.
+- **Fixed only in the working copy.** After staging the markers, write `line one from both` to `notes.md` without `git add`. `--check` still exits 1 and prints `notes.md:1 (staged)`, because the commit would take the staged copy.
 - **Resolved.** Write `line one from both` to `notes.md`, `git add` it, and `--check` exits 0 with `resolved: no unmerged paths and no conflict markers in changed files`. Then `git -C "$run/c" -c user.name=v -c user.email=v@x commit --no-edit -q` makes a merge commit with two parents (`git -C "$run/c" rev-list --parents -1 HEAD` prints three hashes).
 
 ## Gotchas

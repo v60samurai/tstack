@@ -384,14 +384,18 @@ MARKER_RE = re.compile(r"^(<<<<<<<|>>>>>>>|\|\|\|\|\|\|\|)( |$)")
 
 def check_resolved(repo_root: Path, entries: dict) -> int:
     changed = run_git(repo_root, "diff", "HEAD", "--name-only", "--diff-filter=AMU").splitlines()
+    changed += run_git(repo_root, "diff", "--cached", "--name-only", "--diff-filter=AMU").splitlines()
     marked = []
     for rel in sorted(set(changed) - set(entries)):
+        # The commit takes the staged copy, so a marker fixed only in the working copy still counts.
+        staged = subprocess.run(["git", "-C", str(repo_root), "show", f":{rel}"], capture_output=True, text=True, errors="replace")
         path = repo_root / rel
-        if not path.is_file():
-            continue
-        for number, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
-            if MARKER_RE.match(line):
-                marked.append(f"{rel}:{number}: {line[:40]}")
+        copies = [("staged", staged.stdout if staged.returncode == 0 else "")]
+        copies.append(("working copy", path.read_text(errors="replace") if path.is_file() else ""))
+        for where, text in copies:
+            for number, line in enumerate(text.splitlines(), 1):
+                if MARKER_RE.match(line):
+                    marked.append(f"{rel}:{number} ({where}): {line[:40]}")
     for rel in sorted(entries):
         print(f"unmerged: {rel}")
     for hit in marked:

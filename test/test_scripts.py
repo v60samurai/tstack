@@ -107,7 +107,16 @@ class ConflictCheck(unittest.TestCase):
         sh(d, "git", "add", "a.txt")
         r = self.check(d)
         self.assertEqual(r.returncode, 1)
-        self.assertIn("conflict marker: a.txt:1", r.stdout)
+        self.assertIn("conflict marker: a.txt:1 (staged)", r.stdout)
+
+    def test_check_fails_when_markers_stay_staged_after_the_working_copy_is_fixed(self):
+        d = self.conflicted()
+        sh(d, "git", "add", "a.txt")
+        Path(d, "a.txt").write_text("both sides\n")
+        r = self.check(d)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("a.txt:1 (staged)", r.stdout)
+        self.assertNotIn("(working copy)", r.stdout)
 
     def test_check_passes_once_resolved(self):
         d = self.conflicted()

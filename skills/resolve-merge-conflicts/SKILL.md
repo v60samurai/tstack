@@ -22,7 +22,7 @@ This flow only merges. A branch is brought up to date with `git merge origin/<ba
 1. **Summary.** `ctx` lists each unmerged path, its index stages and how many hunks it has.
 2. **One file at a time.** `ctx --file <path>` prints nearby context, the ours, base and theirs sections of each hunk, and a short diff between ours and theirs. Read the whole file only when that is not enough to decide.
 3. **Resolve it** by the PR's intent and the base branch's newer invariants. Take one side whole with `git checkout --ours -- <path>` or `--theirs` when that is right, or edit the hunks and delete the markers. If a conflict shows a product or architecture disagreement, stop and hand it to Harshit with both sides. Do not guess. Then `git add <path>`.
-4. **Prove it is resolved.** `ctx --check` exits 0 only when no path is unmerged and no changed file holds a `<<<<<<<`, `|||||||` or `>>>>>>>` line. Fix what it lists and run it again.
+4. **Prove it is resolved.** `ctx --check` exits 0 only when no path is unmerged and no changed file, staged or in the working copy, holds a `<<<<<<<`, `|||||||` or `>>>>>>>` line. Fix what it lists and run it again.
 5. **Commit the merge** with `git commit --no-edit`, so the repository's commit hooks run.
 6. **Run the checks.** `node ~/dotfiles/machine/verdict/verdict.mjs checks` on the clean merge commit. The merge is a new head with no verdict, so the verifier runs again before the PR is called ready (full-send steps 2 and 3).
 7. **Push normally.** Merging the base in never needs a force push.
