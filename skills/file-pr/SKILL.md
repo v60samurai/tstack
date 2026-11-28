@@ -38,14 +38,20 @@ changes, for example `Created with <model> in <harness>.` Include subagent
 models that wrote part of the change. Use the model name the harness reports.
 If model identity is unavailable, name the harness without guessing a model.
 
+Put the output of `node ~/dotfiles/machine/verdict/verdict.mjs body`, run on
+the PR head, after the explanation. It holds the verify evidence, the check
+results, the followups and the verified commit hash. Do not edit it by hand.
+
 Footer lines go in this order, each only when it applies: the proof line
-(`full-send`), the `sol-loop` line, the model line, then the harness's own
-attribution line if the harness requires one.
+(`full-send`), the model line, then the harness's own attribution line if the
+harness requires one.
 
 Before submission, check the title, description, quotes, and attachments for
 secrets and private details.
 
-Open a real PR rather than a draft so review bots run. If `gh pr create` fails
+Open a real PR rather than a draft so review bots run. A hook refuses
+`gh pr create` and its REST equivalent until `verdict.mjs gate` passes for the
+head. If `gh pr create` fails
 because the GraphQL rate limit is used up, open it through REST with
 `gh api repos/<owner>/<repo>/pulls -f title=... -f head=... -f base=... -F body=@<file>`. If the user also asked
 to babysit it, continue with the `babysit-pr` skill.

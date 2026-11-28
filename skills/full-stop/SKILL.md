@@ -18,9 +18,10 @@ permission does not apply. The overrides below take precedence.
 
 ## No merging
 
-You may commit, push, rebase, fix conflicts, and use `--force-with-lease` on
-this task's branch. Never merge, enable auto-merge, enter a merge queue, push
-to the default branch, bypass branch protection, or delegate those actions.
+You may commit, push, merge the base branch in, and fix conflicts on this
+task's branch. Never force-push or rebase it. Never merge the PR, enable
+auto-merge, enter a merge queue, push to the default branch, bypass branch
+protection, or delegate those actions.
 
 Disable existing auto-merge and remove the PR from any merge queue before
 work begins; check again before each push. Report these changes. If you
@@ -30,9 +31,10 @@ cannot prevent automatic merging, report the blocker before proceeding.
 
 Use full-send's merge gate as the readiness check. Replace its merge and
 final report steps with a handoff. Proof must cover the final diff, and
-review bots must have finished on the final head. Rerun the pre-PR review
-only for a behavior change that did not come from a review or CI fix, or for
-a meaningful conflict fix, and keep it within that skill's round budget.
+review bots must have finished on the final head. The final head needs its
+own PASS verdict, so after any new commit, including a review fix, a CI fix
+or a merge of the base, run full-send's steps 2 and 3 again before you call
+the PR ready.
 
 Fetch the target branch and check the live PR's head, base, checks, reviews,
 and mergeability. Confirm it is open, not a draft, and not set to merge

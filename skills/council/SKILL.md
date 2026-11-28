@@ -5,6 +5,10 @@ description: Trigger this if the user says 'council'.
 
 # Council
 
+Run council only when the user says "council". Never start it on your own,
+for example because a diff looks risky. It never replaces the verify verdict
+that full-send's steps 2 and 3 record.
+
 Before an audit, address outstanding PR comments, fix known issues, and run
 relevant checks. Give council the updated implementation; do not defer known
 fixes until reviews return. If the user wants to discard the implementation
@@ -23,7 +27,9 @@ member is unavailable, report it instead of substituting.
 
 Give each delegate the request and relevant context. For review or feedback,
 keep their work read-only. Collect their responses and summarize the useful
-findings, disagreements, and recommended next steps.
+findings, disagreements, and recommended next steps. A finding counts only
+when a run backs it: a failing test, a repro script, or real command output.
+Drop style, naming, and hypothetical findings.
 
 Do not wait idle. When a result arrives, check its findings against the code
 at once and decide what to fix while the other delegates run. Do not edit

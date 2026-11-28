@@ -22,7 +22,7 @@ a check fails, the required checks pass, someone comments or reviews, or the
 branch conflicts.
 
 - **Only the thread that owns the PR watches it.** If you are a delegated
-  child task (a reviewer, a Sol round, any `delegate_task` child), never call
+  child task (a reviewer, a verifier, any `delegate_task` child), never call
   `watch_pull_request`. The parent owns the PR. Do not watch PRs you are not
   working on.
 - **A wake is news, not a merge decision.** Check the merge gate yourself.
@@ -76,9 +76,12 @@ used up, the REST limit is separate and usually still has room. Use
 ## Reviews
 
 Only act on checks and comments newer than the latest push. Verify every bot
-finding against the source before changing code. Fix real findings and CI
-failures, distinguish repository failures from infrastructure flakes, and reply
-with a written reason when dismissing false positives.
+finding against the source before changing code. A finding counts only when a
+run backs it: a failing test, a repro script, or real command output. Drop
+style, naming, and hypothetical findings. Fix real findings and CI failures,
+each with a regression test, distinguish repository failures from
+infrastructure flakes, and reply with a written reason when dismissing false
+positives.
 
 If the repo has `.macroscope/check-run-agents/*.md`, read those rules before you
 reply to a Macroscope finding. Its findings cite them.
@@ -86,23 +89,27 @@ reply to a Macroscope finding. Its findings cite them.
 CodeRabbit is advisory. Treat its findings like any other finding, but never
 wait for it and never hold a merge for it.
 
-If a review bot leaves feedback you believe is not worth addressing, reply with
-a written reason and resolve the comment. Use the `leaving-pr-comments` skill
-for every comment posted on the user's behalf.
+If a review bot leaves feedback you believe is not worth addressing, or that
+has no run behind it, reply with a written reason and resolve the comment.
+Do not churn code on it. Use the `leaving-pr-comments` skill for every
+comment posted on the user's behalf.
 
 Screenshots and videos help as well, when you have a way to upload them.
 
 Keep the PR at the size the user's goal needs. Review loops tend to grow a
 PR one cheap-looking fix at a time. Fix real bugs in the intended case.
-Decline the rest with a written reason, and list them as follow-ups:
+Decline the rest with a written reason, and log each one with
+`node ~/dotfiles/machine/verdict/verdict.mjs followup "<text>"`:
 unneeded tests, guards for edge cases that do not matter, extra integration
 or compatibility, and small performance costs. Prefer the fix that deletes or
 narrows code.
 
 ## Base branch and merging
 
-Keep an eye on changes to `main` and rebase when needed. `pr-wait` reports when
-new base commits touch this PR's files, and when the PR becomes BEHIND or DIRTY.
+Keep an eye on changes to `main` and merge it into the branch when needed
+(`git merge origin/<base>`), then push normally. Never rebase or force-push.
+`pr-wait` reports when new base commits touch this PR's files, and when the PR
+becomes BEHIND or DIRTY.
 `watch_pull_request` reports conflicts only, so check for BEHIND yourself
 before you call the PR ready.
 If an overlapping PR makes this one obsolete, stop monitoring, report it to the
@@ -110,8 +117,17 @@ user, and ask before closing the PR unless closure was explicitly authorized.
 
 If nothing has changed, stay quiet rather than posting filler comments. Stop
 when `pr-wait` exits 0, or in T3 Code when the merge gate passes on the latest
-head. Merge only when the user explicitly requested it;
-otherwise report that the PR is ready. Right before a merge, run `git fetch` and
+head.
+
+Ready also needs a fresh PASS verdict for the head. Verdicts are keyed by
+commit, so every fix or merge of the base leaves the new head without one.
+Before you call the PR ready, run `verdict.mjs checks` on the new head, then
+have a fresh agent that did not write the code run the repo's `verify-<app>`
+skill and record the verdict (full-send steps 2 and 3). A hook refuses
+`gh pr ready` until `verdict.mjs gate` passes for the head.
+
+Merge only when the user explicitly requested it; otherwise report that the PR
+is ready. Right before a merge, run `git fetch` and
 check the PR again. Never merge when it is BEHIND or DIRTY, or when base commits
-that landed after the last green run touch this PR's files. Rebase, push, and
-wait for green again.
+that landed after the last green run touch this PR's files. Merge the base
+in, push, and wait for green again.
