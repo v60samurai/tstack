@@ -62,7 +62,9 @@ one appears.
    separate `codex exec` on the ChatGPT ai-dev account with `gpt-6.2-sol` at
    high reasoning effort. When Codex wrote the code, run `verify.sh claude
    <repo> verify-<app> "<what the change promises>"`: a separate `claude -p`
-   session. Run it from your own shell. The verifier reads the skill by path,
+   session. Run it from your own shell. If you run `verify.sh codex` in the
+   background, run `verify.sh codex <repo> --stamp` in the foreground once it
+   finishes, so your session's hook can stamp the record. The verifier reads the skill by path,
    drives the change the way a user would, writes `evidence.md` (the full HEAD
    SHA, each command, its output and the screenshot paths) and runs
    `verdict.mjs record --verdict PASS|ISSUES|BLOCKED`. You never run
