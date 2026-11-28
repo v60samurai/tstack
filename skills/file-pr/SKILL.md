@@ -21,26 +21,23 @@ GOOD
 
 > ✅ perf(server): cut websocket frame size by 70%+ with gzipping
 
-Open the description with a simple explanation of the problem based on the
-user's original prompt, then briefly explain the solution. Do not lead with an
-implementation inventory:
+File only after the verifier recorded PASS for the exact HEAD (full-send
+steps 2 and 3). Then write the body:
 
-BAD
-
-> ❌ Removed implicit workspace carry-over from every "new thread" entry point (cmd+n / cmd+shift+o, sidebar v1/v2 buttons, command palette). New threads inherit only the project from context; branch, worktree, and env mode always come from the configured defaults. Deleted buildContextualThreadOptions, startNewThreadInProjectFromContext, and the v1 sidebar's seed-context machinery.
-
-GOOD
-
-> ✅ My "new worktree" default was ignored when starting new threads on existing worktrees. Super unintuitive. Now your preferences always apply.
+1. Run the `merge-risk` skill on the head. Its block opens the body.
+2. Write the rest with the `write-pr-description` skill: why the change
+   exists, the decisions that had a real alternative, the blast radius, what
+   was verified and how, and where to look first. Check every claim against
+   the code or a run before it goes in. Keep the repository's PR template when
+   it has one.
+3. Put the output of `node ~/dotfiles/machine/verdict/verdict.mjs body`, run
+   on the head, in the Verification section unedited. It carries the verify
+   evidence, the check results, the followups and the verified commit hash.
 
 End the description with the public model name and harness that made the
 changes, for example `Created with <model> in <harness>.` Include subagent
 models that wrote part of the change. Use the model name the harness reports.
 If model identity is unavailable, name the harness without guessing a model.
-
-Put the output of `node ~/dotfiles/machine/verdict/verdict.mjs body`, run on
-the PR head, after the explanation. It holds the verify evidence, the check
-results, the followups and the verified commit hash. Do not edit it by hand.
 
 Footer lines go in this order, each only when it applies: the proof line
 (`full-send`), the model line, then the harness's own attribution line if the
@@ -49,7 +46,8 @@ harness requires one.
 Before submission, check the title, description, quotes, and attachments for
 secrets and private details.
 
-Open a real PR rather than a draft so review bots run. A hook refuses
+Open a real PR rather than a draft so review bots run, unless the user or the
+repository asks for a draft. A hook refuses
 `gh pr create` and its REST equivalent until `verdict.mjs gate` passes for the
 head. If `gh pr create` fails
 because the GraphQL rate limit is used up, open it through REST with

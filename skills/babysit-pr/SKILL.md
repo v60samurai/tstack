@@ -108,6 +108,8 @@ narrows code.
 
 Keep an eye on changes to `main` and merge it into the branch when needed
 (`git merge origin/<base>`), then push normally. Never rebase or force-push.
+When the merge stops on conflicts, resolve them with the
+`resolve-merge-conflicts` skill.
 `pr-wait` reports when new base commits touch this PR's files, and when the PR
 becomes BEHIND or DIRTY.
 `watch_pull_request` reports conflicts only, so check for BEHIND yourself

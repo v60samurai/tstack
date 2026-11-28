@@ -77,9 +77,12 @@ For a `MODERNIZE` disposition:
 
 1. Create a safe local branch or disposable worktree at the recorded PR head.
 2. Merge the freshly fetched base branch into it (`git merge origin/<base>`).
-3. Resolve each conflict according to the PR's current intent and the base
-   branch's newer invariants. If a conflict reveals a product or architecture
-   disagreement, stop and reconsider the disposition instead of guessing.
+3. When the merge stops on conflicts, resolve them with the
+   `resolve-merge-conflicts` skill, by the PR's current intent and the base
+   branch's newer invariants. It reads only the conflict hunks and ends with
+   its `--check`, which must pass before you commit the merge. If a conflict
+   reveals a product or architecture disagreement, stop and reconsider the
+   disposition instead of guessing.
 4. Compare the PR's diff from before the merge
    (`git diff <recorded merge base> <recorded head>`) with the diff after it
    (`git diff origin/<base>...HEAD`). Confirm that no intentional behavior

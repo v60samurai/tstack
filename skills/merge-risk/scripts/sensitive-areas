@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Names the sensitive areas a branch touches, one line per hit: <area>\t<path>\t<why>.
+
+Areas: auth, permissions, secrets, payments, PII, migrations, dependencies, infra/config. Paths are matched by name, and
+added lines are read for credential-shaped values and dependency version changes. Prints "none" when nothing matches.
+
+  sensitive-areas [--repo DIR] [--base REF]   (REF defaults to the merge base with origin/HEAD, then origin/main)
+"""
+import argparse
+import re
+import subprocess
+import sys
+
+PATHS = [
+    ("auth", r"(^|/|[._-])(auth|oauth|login|logout|signin|signup|sessions?|sso|saml|jwt|passport|mfa|2fa)([./_-]|$)"),
+    ("permissions", r"(^|/|[._-])(permissions?|rbac|acl|roles?|polic(y|ies)|access[-_]?control|guards?|authz|grants?|scopes?)([./_-]|$)"),
+    ("secrets", r"(^|/)\.env($|\.)|(^|/|[._-])(secrets?|credentials?|keychain|tokens?)([./_-]|$)|\.(pem|key|p12|pfx)$|(^|/)\.(npmrc|netrc|pypirc)$"),
+    ("payments", r"(^|/|[._-])(payments?|billing|stripe|checkout|invoices?|refunds?|subscriptions?|pricing|wallets?|payouts?)([./_-]|$)"),
+    ("PII", r"(^|/|[._-])(pii|gdpr|ccpa|privacy|personal[-_]?data|customer[-_]?data|user[-_]?data|profiles?)([./_-]|$)"),
+    ("migrations", r"(^|/)(migrations?|alembic|drizzle|flyway|liquibase)/|(^|/|[._-])migrate([./_-]|$)|(^|/)schema\.(sql|prisma|rb)$|\.sql$"),
+    ("dependencies", r"(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|poetry\.lock|uv\.lock|Pipfile(\.lock)?|Cargo\.(lock|toml)|go\.(mod|sum)|Gemfile(\.lock)?|composer\.(json|lock)|requirements[^/]*\.txt|pyproject\.toml|\.node-version|\.nvmrc|\.tool-versions|mise\.toml)$"),
+    ("infra/config", r"(^|/)(\.github|\.circleci|\.gitlab-ci\.yml|terraform|k8s|kubernetes|helm|charts|deploy|infra|\.husky|\.githooks|hooks)(/|$)|(^|/)(Dockerfile[^/]*|docker-compose[^/]*|Procfile|Makefile|vercel\.json|netlify\.toml|fly\.toml|railway\.(json|toml)|lefthook\.ya?ml|nginx[^/]*\.conf|settings(\.local)?\.json|hooks\.json)$|\.tf$"),
+]
+CREDENTIAL = re.compile(r"(?i)(api[_-]?key|secret|passw(or)?d|private[_-]?key|access[_-]?token|auth[_-]?token)\s*[:=]\s*['\"]?[^\s'\"]{6,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9_-]{20,}")
+VERSION = re.compile(r'"(?!version")[^"]+"\s*:\s*"(workspace:|npm:)?[\^~<>=]*\d')
+
+
+def git(repo, *args):
+    r = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True)
+    if r.returncode:
+        raise RuntimeError(f"git {' '.join(args)}: {r.stderr.strip()}")
+    return r.stdout
+
+
+def default_base(repo):
+    for ref in ("origin/HEAD", "origin/main", "main"):
+        try:
+            return git(repo, "merge-base", "HEAD", ref).strip()
+        except RuntimeError:
+            continue
+    raise RuntimeError("no base found: pass --base")
+
+
+def hits(repo, base):
+    out = []
+    for line in git(repo, "diff", "--name-only", "--no-renames", f"{base}...HEAD").splitlines():
+        for area, pattern in PATHS:
+            if re.search(pattern, line, re.I):
+                out.append((area, line, "path"))
+        patch = git(repo, "diff", "--no-renames", "-U0", f"{base}...HEAD", "--", line).splitlines()
+        added = [p for p in patch if p.startswith("+") and not p.startswith("+++")]
+        if any(CREDENTIAL.search(p) for p in added):
+            out.append(("secrets", line, "an added line looks like a credential"))
+        if line.endswith("package.json") and any(VERSION.search(p) for p in patch if p[:1] in "+-" and not p.startswith(("+++", "---"))):
+            out.append(("dependencies", line, "a version string changed"))
+    return sorted(set(out))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--repo", default=".")
+    ap.add_argument("--base")
+    a = ap.parse_args()
+    try:
+        found = hits(a.repo, a.base or default_base(a.repo))
+    except RuntimeError as e:
+        print(f"sensitive-areas: {e}", file=sys.stderr)
+        return 2
+    print("\n".join("\t".join(h) for h in found) or "none")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

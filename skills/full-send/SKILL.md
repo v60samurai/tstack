@@ -82,9 +82,14 @@ one appears.
    regression test. Then run steps 2 and 3 again on the new commit. After
    three verdicts on the branch that are not PASS, `verdict.mjs` refuses
    more and the gate blocks. Stop and ask the user, with the evidence.
+   A spec mismatch the verifier proved (its `## Spec mismatches for Harshit`
+   section) is a question, not a finding to fix. Ask the user, mismatch by
+   mismatch, whether to fix the code or update the spec, and change nothing
+   until they answer.
 5. **File the PR** with the `file-pr` skill once the verdict for the head is
    PASS. A hook refuses `gh pr create` until `verdict.mjs gate` passes for
-   the head. The body includes the output of `verdict.mjs body`.
+   the head. The body opens with the `merge-risk` block and includes the
+   output of `verdict.mjs body`.
 6. **Babysit the PR** with the `babysit-pr` skill. Fix real findings and CI
    failures. A fix makes a new head with no verdict, so run steps 2 and 3
    again on it before you call the PR ready or merge it.
