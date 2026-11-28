@@ -71,6 +71,11 @@ class SensitiveAreas(unittest.TestCase):
         found, out = self.run_on({"package.json": '{\n  "scripts": {"t": "b"},\n  "dependencies": {"left-pad": "^1.0.0"}\n}\n'})
         self.assertEqual(out.strip(), "none", out)
 
+    def test_a_non_ascii_path_is_read_as_itself(self):
+        found, _ = self.run_on({"src/café/auth.ts": "x\n", "src/café.ts": 'const API_KEY = "abcdef123456"\n'})
+        self.assertIn(("auth", "src/café/auth.ts"), found)
+        self.assertIn(("secrets", "src/café.ts"), found)
+
     def test_an_added_credential_is_flagged_whatever_the_path(self):
         found, _ = self.run_on({"src/client.ts": 'const API_KEY = "abcdef123456"\n'})
         self.assertIn(("secrets", "src/client.ts"), found)
@@ -117,6 +122,20 @@ class ConflictCheck(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("a.txt:1 (staged)", r.stdout)
         self.assertNotIn("(working copy)", r.stdout)
+
+    def test_check_reads_staged_markers_in_a_non_ascii_path(self):
+        d = repo({"café.txt": "one\n"})
+        sh(d, "git", "switch", "-qc", "feat")
+        commit(d, {"café.txt": "feat side\n"}, "feat")
+        sh(d, "git", "switch", "-q", "main")
+        commit(d, {"café.txt": "main side\n"}, "main")
+        sh(d, "git", "switch", "-q", "feat")
+        sh(d, "git", "merge", "main", check=False)
+        sh(d, "git", "add", "café.txt")
+        Path(d, "café.txt").write_text("both sides\n")
+        r = self.check(d)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("café.txt:1 (staged)", r.stdout)
 
     def test_check_passes_once_resolved(self):
         d = self.conflicted()

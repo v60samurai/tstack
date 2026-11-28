@@ -43,7 +43,8 @@ def default_base(repo):
 
 def hits(repo, base):
     out = []
-    for line in git(repo, "diff", "--name-only", "--no-renames", f"{base}...HEAD").splitlines():
+    # -z keeps a non-ASCII path as itself; without it git prints it quoted and escaped.
+    for line in filter(None, git(repo, "diff", "--name-only", "-z", "--no-renames", f"{base}...HEAD").split("\0")):
         for area, pattern in PATHS:
             if re.search(pattern, line, re.I):
                 out.append((area, line, "path"))

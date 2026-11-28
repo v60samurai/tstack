@@ -383,8 +383,10 @@ MARKER_RE = re.compile(r"^(<<<<<<<|>>>>>>>|\|\|\|\|\|\|\|)( |$)")
 
 
 def check_resolved(repo_root: Path, entries: dict) -> int:
-    changed = run_git(repo_root, "diff", "HEAD", "--name-only", "--diff-filter=AMU").splitlines()
-    changed += run_git(repo_root, "diff", "--cached", "--name-only", "--diff-filter=AMU").splitlines()
+    # -z keeps a non-ASCII path as itself; without it git prints it quoted and escaped.
+    changed = run_git(repo_root, "diff", "HEAD", "--name-only", "-z", "--diff-filter=AMU").split("\0")
+    changed += run_git(repo_root, "diff", "--cached", "--name-only", "-z", "--diff-filter=AMU").split("\0")
+    changed = [rel for rel in changed if rel]
     marked = []
     for rel in sorted(set(changed) - set(entries)):
         # The commit takes the staged copy, so a marker fixed only in the working copy still counts.
