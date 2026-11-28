@@ -31,8 +31,9 @@ steps 2 and 3). Then write the body:
    the code or a run before it goes in. Keep the repository's PR template when
    it has one.
 3. Put the output of `node ~/dotfiles/machine/verdict/verdict.mjs body`, run
-   on the head, in the Verification section unedited. It carries the verify
-   evidence, the check results, the followups and the verified commit hash.
+   on the head, in as the Verification section, unedited. It brings its own
+   heading and carries the verify evidence, the check results, the followups
+   and the verified commit hash.
 
 End the description with the public model name and harness that made the
 changes, for example `Created with <model> in <harness>.` Include subagent

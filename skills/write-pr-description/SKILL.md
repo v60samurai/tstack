@@ -51,7 +51,7 @@ In this order. Drop any section that would hold one line, and let the opening ca
 2. **Why.** One to three sentences on the problem and what the change does about it, in the user's terms. A reviewer who reads only this paragraph can tell whether the PR is theirs.
 3. **Decisions.** Each choice that had a real alternative, and why the alternative lost. This is the content the diff can never recover. Where there was no real alternative, state the decision plainly and do not invent one.
 4. **Blast radius.** What this can break beyond the files it touches: callers, consumers, other repositories, data, permissions. For a permissions change, say what is now allowed that was not, and what is now refused that was allowed. Name behavior changes that are side effects of the main change.
-5. **Verification.** What was proven and how. The output of `verdict.mjs body` carries the verify evidence, the check results, the followups and the verified commit hash. Put it here unedited. Above it, write one or two sentences on what the verifier drove and what it showed, taken from `evidence.md`. When something was not run, say so once and name the command that would run it.
+5. **Verification.** The output of `verdict.mjs body`, unedited. It brings its own `## Verification` heading, so do not write another. It carries the verified commit, the verdict, the verify evidence, the check results and the followups. When something was not run, the merge-risk Verification gaps already say so. Do not repeat them.
 6. **Look here first.** The one to three places where a mistake is most likely or most expensive, with file links, and what you are unsure of. On a large PR, add a reading order. See [references/review-guide.md](references/review-guide.md).
 
 Followups live outside git, next to the verdict record. `verdict.mjs body` copies them into the Verification section. Do not move them anywhere else and do not fix them in this PR.
@@ -78,6 +78,6 @@ Rough lengths: a mechanical change is a short paragraph, a focused fix or featur
 
 - Does every claim trace to code you read or a run you can name?
 - Does the Verification section describe what ran, and say plainly what did not?
-- Is the merge-risk block first, and the `verdict.mjs body` output present and unedited?
+- Is the merge-risk block first, and the `verdict.mjs body` output present, unedited, and the only `## Verification` heading?
 - Does the body match the branch as it stands now?
 - Did cutting remove a decision, a rejected alternative or an open question? Put it back.
