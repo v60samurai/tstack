@@ -16,7 +16,8 @@ assume full autonomy. If they did, everything below applies.
 The user grants you permission to:
 
 - Merge the PR once the merge gate passes.
-- Force-push the PR's own branch with `--force-with-lease` after a rebase.
+- Push the PR's own branch. Never force-push any branch. A hook refuses every
+  force push.
 - Use the test methods that Proof needs, without asking first.
 
 ## Testing permission
@@ -45,21 +46,53 @@ one appears.
 1. **Finish the change.** Complete the goal from the user's request with the
    smallest change that works. Fix the case that happened, not every case
    that could. If you are on the default branch, create a branch first.
-2. **Prove it.** Get proof for every change you made. See "Proof".
-3. **Get feedback.** Run one pre-PR review, chosen by risk. Use the
-   `sol-loop` skill by default. When the diff touches auth, permissions,
-   payments, data deletion, migrations, or concurrency, use the `council`
-   skill instead. Never run both.
-4. **File the PR** with the `file-pr` skill. Rebase onto the latest default
-   branch first. Add one short line to the description that says how you proved
-   the change.
-5. **Babysit the PR** with the `babysit-pr` skill. Fix real findings and CI
-   failures. Get proof for each fix before you push it.
-6. **Merge** when the merge gate passes.
-7. **Report** in your final message: the PR link, the merge commit, your proof,
+   Bring the branch up to date by merging the latest default branch in
+   (`git merge origin/<base>`), never by rebasing. Commit.
+2. **Prove it with runs.** On a clean tree at the exact HEAD, run
+   `node ~/dotfiles/machine/verdict/verdict.mjs checks`. With no arguments it
+   runs the repo's lint, typecheck, build and test scripts. To run other
+   commands, pass them as `-- '<cmd>' ...`. If the branch has a `fix:` commit,
+   also run `verdict.mjs regression -- '<command that runs the new test>'`. It
+   proves the new test fails on the base and passes on HEAD. See "Proof".
+3. **Verify like a user.** A second agent that did not write the code runs
+   the repo's `verify-<app>` skill (under `.cursor/skills/`, `.claude/skills/`
+   or `.agents/skills/`) against HEAD, through
+   `~/dotfiles/machine/verdict/verify.sh`. When Claude wrote the code, run
+   `verify.sh codex <repo> verify-<app> "<what the change promises>"`: a
+   separate `codex exec` on the ChatGPT ai-dev account with `gpt-6.2-sol` at
+   high reasoning effort. When Codex wrote the code, run `verify.sh claude
+   <repo> verify-<app> "<what the change promises>"`: a separate `claude -p`
+   session. Run it from your own shell. The verifier reads the skill by path,
+   drives the change the way a user would, writes `evidence.md` (the full HEAD
+   SHA, each command, its output and the screenshot paths) and runs
+   `verdict.mjs record --verdict PASS|ISSUES|BLOCKED`. You never run
+   `record`. A hook stamps the record with the verifier's identity, and the
+   gate rejects a record from an agent that committed or edited the change.
+   If the repo has no verify skill, create one with
+   `/create-verification-skill` first, in its own PR. When the change alters
+   a user flow, run `/maintain-verification-skill`. Where a bug is costly
+   (money, auth, data loss, concurrency, state machines), also use
+   `/create-formal-verification-skill`, and keep it current with
+   `/maintain-formal-verification-skill`.
+4. **Fix and re-verify.** Only findings backed by a run count: a failing
+   test, a repro script, or real command output. Reviews are optional, such
+   as `interrogate` on request, Codex, or review bots. Drop style, naming,
+   and hypothetical findings. Log nice-to-haves with `verdict.mjs followup
+   "<text>"` and never fix them in this PR. Each real finding gets a
+   regression test. Then run steps 2 and 3 again on the new commit. After
+   three verdicts on the branch that are not PASS, `verdict.mjs` refuses
+   more and the gate blocks. Stop and ask the user, with the evidence.
+5. **File the PR** with the `file-pr` skill once the verdict for the head is
+   PASS. A hook refuses `gh pr create` until `verdict.mjs gate` passes for
+   the head. The body includes the output of `verdict.mjs body`.
+6. **Babysit the PR** with the `babysit-pr` skill. Fix real findings and CI
+   failures. A fix makes a new head with no verdict, so run steps 2 and 3
+   again on it before you call the PR ready or merge it.
+7. **Merge** when the merge gate passes.
+8. **Report** in your final message: the PR link, the merge commit, your proof,
    and each decision you made for the user.
 
-Stay active from step 1 to step 7. If you end your turn while checks or bots are
+Stay active from step 1 to step 8. If you end your turn while checks or bots are
 pending, the work stops, because nobody will prompt you again. Wait with the
 watcher from `babysit-pr`, so something wakes you when the PR changes. In T3
 Code that is `watch_pull_request`. If you stop before the merge, call
@@ -72,7 +105,7 @@ reproduction, a screenshot. Use the most direct proof the change allows:
 
 - Reproduce the original failure, apply the fix, then watch the same
   reproduction pass.
-- Run the checks that the repo's CI runs (typecheck, lint, tests).
+- Run the checks that the repo's CI runs with `verdict.mjs checks` (step 2).
 - Add one focused test that fails without the fix, when the behavior has none
   and the repo has a test setup.
 - For UI and runtime behavior, run the app and look at the change. Green mocked
@@ -87,6 +120,7 @@ Ask the user.
 Full confidence means all of these are true on the latest commit:
 
 - Your proof covers every change in the diff.
+- A PASS verdict exists for the current head (`verdict.mjs gate` passes).
 - Required checks are green.
 - Review bots have finished, and each finding is fixed or dismissed with a
   written reason.
@@ -113,8 +147,7 @@ Ask only when you cannot continue alone:
 - You cannot prove the change.
 - The merge gate cannot pass, and you cannot fix that yourself.
 - The next step is outside the grant above: deleting data, touching production,
-  changing things outside the repo, closing a PR, or force-pushing any other
-  branch.
+  changing things outside the repo, or closing a PR.
 - The goal is ambiguous in a way that changes the result.
 - Another PR makes this one obsolete.
 
